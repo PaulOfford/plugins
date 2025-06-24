@@ -201,21 +201,21 @@ function canid_0x0a8(buffer, ptr, tree)
   tvbr = buffer:range(ptr,2)  -- set up a range
   local torque_int = (tvbr:le_uint() + .0) / 32  -- extract value
   tree:add(pt6_0x0a8_torque_int, torque_int)
+  info_text = "Torque: " .. torque_int .. " Nm"
   ptr = ptr + 2
 
   -- byte 5 - Clutch pedal status
   tvbr = buffer:range(ptr,1)  -- set up a range
   byte_in_hex = tvbr:uint()  -- extract the byte
   tree:add(pt6_0x0a8_clutch, bit.band(byte_in_hex, 0x01))
+  info_text = info_text .. ", Clutch: " .. bit.band(byte_in_hex, 0x01)
   ptr = ptr + 2
-
 
   -- byte 7 - Brake pedal status
   tvbr = buffer:range(ptr,1)  -- set up a range
   byte_in_hex = tvbr:uint()  -- extract the byte
   tree:add(pt6_0x0a8_brake, bit.band(byte_in_hex, 0x20))
-
-  info_text = torque_int .. " Nm"
+  info_text = info_text .. ", Brake: " .. bit.band(byte_in_hex, 0x20)
 
   return info_text
 end
