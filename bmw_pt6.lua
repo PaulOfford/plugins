@@ -147,6 +147,7 @@ pt6_0x0a8_torque = ProtoField.float("bmw_pt6.0x0a8.torque", "Torque (Nm)")
 pt6_0x0a8_torque_int = ProtoField.uint16("bmw_pt6.0x0a8.torque_int", "Torque rounded (Nm)", base.DEC)
 pt6_0x0a8_clutch = ProtoField.uint8("bmw_pt6.0x0a8.clutch", "Clutch depressed", base.DEC, VALS_YES_NO, 0x01)  -- Byte 5 - .... ...1
 pt6_0x0a8_brake = ProtoField.uint8("bmw_pt6.0x0a8.brake", "Brake pedal depressed", base.DEC, VALS_YES_NO, 0x20)  -- Byte 7 - ..1. ....
+pt6_0x0c8_sw_angle = ProtoField.float("bmw_pt6.0x0a8.sw_angle", "Steering wheel position (degrees)", base.DEC)
 
 pt6_0x0aa_throttle_position = ProtoField.uint16("bmw_pt6.0x0aa.throttle_position", "Throttle position", base.DEC)
 pt6_0x0aa_rpm = ProtoField.int16("bmw_pt6.0x0aa.rpm", "Engine RPM", base.DEC)
@@ -163,7 +164,7 @@ bmw_pt6.fields = {
   pt6_data_byte_4, pt6_data_byte_5, pt6_data_byte_6, pt6_data_byte_7,
   pt6_0x0a8_torque, pt6_0x0a8_torque_int, pt6_0x0a8_clutch, pt6_0x0a8_brake,
   pt6_0x0aa_throttle_position, pt6_0x0aa_rpm,
-  pt6_0x130_byte_0, pt6_0x130_byte_1
+  pt6_0x130_byte_0, pt6_0x130_byte_1, pt6_0x0c8_sw_angle
 } 
 
 
@@ -257,7 +258,19 @@ function canid_0x0c4(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "Steering Wheel position"
+  ptr = 0
+  tvbr = buffer:range(ptr,2)  -- set up a range
+  local sw_position = tvbr:le_int()  -- extract value
+
+  if sw_position > 32767 then
+	steering_wheel_degrees = math.floor((sw_position - 65535) / 2.3) / 10
+  else
+	steering_wheel_degrees = math.floor(sw_position / 2.3) / 10
+  end
+  
+  tree:add(pt6_0x0c8_sw_angle, steering_wheel_degrees)
+
+  info_text = "Steering wheel angle: " .. steering_wheel_degrees .. " degrees"
 
   return info_text
 end
@@ -267,7 +280,19 @@ function canid_0x0c8(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "Steering wheel position"
+  ptr = 0
+  tvbr = buffer:range(ptr,2)  -- set up a range
+  local sw_position = tvbr:le_int()  -- extract value
+
+  if sw_position > 32767 then
+	steering_wheel_degrees = math.floor((sw_position - 65535) / 2.3) / 10
+  else
+	steering_wheel_degrees = math.floor(sw_position / 2.3) / 10
+  end
+  
+  tree:add(pt6_0x0c8_sw_angle, steering_wheel_degrees)
+
+  info_text = "Steering wheel angle: " .. steering_wheel_degrees .. " degrees"
 
   return info_text
 end
