@@ -96,6 +96,16 @@ VALS_PT6_CANID = {
 	[0x7C3] = "Keyfob (security, comfort and CBS data)"
 }
 
+VALS_YES_NO = {
+    [0] = "No",
+    [1] = "Yes"
+}
+
+VALS_0X0a8_CLUTCH = {
+	[0x00] = "Released",
+	[0x01] = "Depressed",
+}
+
 VALS_0X130_BYTE_0 = {
 	[0x00] = "Engine off",
 	[0x40] = "Engine off - key being inserted",
@@ -135,6 +145,8 @@ pt6_data_byte_7 = ProtoField.uint8("bmw_pt6.data.byte_7", "Byte 7", base.HEX)
 
 pt6_0x0a8_torque = ProtoField.float("bmw_pt6.0x0a8.torque", "Torque (Nm)")
 pt6_0x0a8_torque_int = ProtoField.uint16("bmw_pt6.0x0a8.torque_int", "Torque rounded (Nm)", base.DEC)
+pt6_0x0a8_clutch = ProtoField.uint8("bmw_pt6.0x0a8.clutch", "Clutch depressed", base.DEC, VALS_YES_NO, 0x01)  -- Byte 5 - .... ...1
+pt6_0x0a8_brake = ProtoField.uint8("bmw_pt6.0x0a8.brake", "Brake pedal depressed", base.DEC, VALS_YES_NO, 0x20)  -- Byte 7 - ..1. ....
 
 pt6_0x0aa_throttle_position = ProtoField.uint16("bmw_pt6.0x0aa.throttle_position", "Throttle position", base.DEC)
 pt6_0x0aa_rpm = ProtoField.int16("bmw_pt6.0x0aa.rpm", "Engine RPM", base.DEC)
@@ -149,7 +161,7 @@ bmw_pt6.fields = {
   pt6_seatbelt_status, pt6_canid,
   pt6_data_byte_0, pt6_data_byte_1, pt6_data_byte_2, pt6_data_byte_3,
   pt6_data_byte_4, pt6_data_byte_5, pt6_data_byte_6, pt6_data_byte_7,
-  pt6_0x0a8_torque, pt6_0x0a8_torque_int,
+  pt6_0x0a8_torque, pt6_0x0a8_torque_int, pt6_0x0a8_clutch, pt6_0x0a8_brake,
   pt6_0x0aa_throttle_position, pt6_0x0aa_rpm,
   pt6_0x130_byte_0, pt6_0x130_byte_1
 } 
@@ -187,9 +199,22 @@ function canid_0x0a8(buffer, ptr, tree)
   ptr = ptr + 2
 
   tvbr = buffer:range(ptr,2)  -- set up a range
-  local torque_int = tvbr:le_uint() / 32  -- extract value
-  tree:add(pt6_0x0a8_torque_int, torque_int)
+  local torque_int = (tvbr:le_uint() + 0) / 32  -- extract value
+--  tree:add(pt6_0x0a8_torque_int, torque_int)
+  tree:add(pt6_0x0a8_torque_int, 0)
   ptr = ptr + 2
+
+  -- byte 5 - Clutch pedal status
+  tvbr = buffer:range(ptr,1)  -- set up a range
+  byte_in_hex = tvbr:uint()  -- extract the byte
+  tree:add(pt6_0x0a8_clutch, bit.band(byte_in_hex, 0x01))
+  ptr = ptr + 2
+
+
+  -- byte 7 - Brake pedal status
+  tvbr = buffer:range(ptr,1)  -- set up a range
+  byte_in_hex = tvbr:uint()  -- extract the byte
+  tree:add(pt6_0x0a8_brake, bit.band(byte_in_hex, 0x20))
 
   info_text = torque_int .. " Nm"
 
@@ -906,174 +931,173 @@ function bmw_pt6.dissector(buffer,pinfo,tree)
   if pinfo.visited then 
 
     if can_length > 0 then 
-		if can_id < 0x600 then
-			if debug_set then print("Processing PT6 message") end
-			pinfo.cols.protocol = bmw_pt6.name
+      if debug_set then print("Processing PT6 message") end
+      pinfo.cols.protocol = bmw_pt6.name
 
-			vals = {}
+      vals = {}
 
-			local subtree = tree:add(bmw_pt6, buffer(), "BMW PT6 Protocol")
-			local rawdatatree = subtree:add(bmw_pt6, buffer(), "BMW PT6 Raw Data")
+      local subtree = tree:add(bmw_pt6, buffer(), "BMW PT6 Protocol")
+      local rawdatatree = subtree:add(bmw_pt6, buffer(), "BMW PT6 Raw Data")
 
-			ptr = 24
+      ptr = 24
 
-			tvbr = buffer:range(ptr,1)  -- set up a range
-			byte_in_hex = tvbr:uint()  -- extract the byte
-			rawdatatree:add(pt6_data_byte_0, byte_in_hex)
-			ptr = ptr + 1
+      tvbr = buffer:range(ptr,1)  -- set up a range
+      byte_in_hex = tvbr:uint()  -- extract the byte
+      rawdatatree:add(pt6_data_byte_0, byte_in_hex)
+      ptr = ptr + 1
 
-			tvbr = buffer:range(ptr,1)  -- set up a range
-			byte_in_hex = tvbr:uint()  -- extract the byte
-			rawdatatree:add(pt6_data_byte_1, byte_in_hex)
-			ptr = ptr + 1
+      tvbr = buffer:range(ptr,1)  -- set up a range
+      byte_in_hex = tvbr:uint()  -- extract the byte
+      rawdatatree:add(pt6_data_byte_1, byte_in_hex)
+      ptr = ptr + 1
 
-			tvbr = buffer:range(ptr,1)  -- set up a range
-			byte_in_hex = tvbr:uint()  -- extract the byte
-			rawdatatree:add(pt6_data_byte_2, byte_in_hex)
-			ptr = ptr + 1
+      tvbr = buffer:range(ptr,1)  -- set up a range
+      byte_in_hex = tvbr:uint()  -- extract the byte
+      rawdatatree:add(pt6_data_byte_2, byte_in_hex)
+      ptr = ptr + 1
 
-			tvbr = buffer:range(ptr,1)  -- set up a range
-			byte_in_hex = tvbr:uint()  -- extract the byte
-			rawdatatree:add(pt6_data_byte_3, byte_in_hex)
-			ptr = ptr + 1
+      tvbr = buffer:range(ptr,1)  -- set up a range
+      byte_in_hex = tvbr:uint()  -- extract the byte
+      rawdatatree:add(pt6_data_byte_3, byte_in_hex)
+      ptr = ptr + 1
+	  
+      tvbr = buffer:range(ptr,1)  -- set up a range
+      byte_in_hex = tvbr:uint()  -- extract the byte
+      rawdatatree:add(pt6_data_byte_4, byte_in_hex)
+      ptr = ptr + 1
 
-			tvbr = buffer:range(ptr,1)  -- set up a range
-			byte_in_hex = tvbr:uint()  -- extract the byte
-			rawdatatree:add(pt6_data_byte_4, byte_in_hex)
-			ptr = ptr + 1
+      tvbr = buffer:range(ptr,1)  -- set up a range
+      byte_in_hex = tvbr:uint()  -- extract the byte
+      rawdatatree:add(pt6_data_byte_5, byte_in_hex)
+      ptr = ptr + 1
 
-			tvbr = buffer:range(ptr,1)  -- set up a range
-			byte_in_hex = tvbr:uint()  -- extract the byte
-			rawdatatree:add(pt6_data_byte_5, byte_in_hex)
-			ptr = ptr + 1
+      tvbr = buffer:range(ptr,1)  -- set up a range
+      byte_in_hex = tvbr:uint()  -- extract the byte
+      rawdatatree:add(pt6_data_byte_6, byte_in_hex)
+      ptr = ptr + 1
 
-			tvbr = buffer:range(ptr,1)  -- set up a range
-			byte_in_hex = tvbr:uint()  -- extract the byte
-			rawdatatree:add(pt6_data_byte_6, byte_in_hex)
-			ptr = ptr + 1
+      tvbr = buffer:range(ptr,1)  -- set up a range
+      byte_in_hex = tvbr:uint()  -- extract the byte
+      rawdatatree:add(pt6_data_byte_7, byte_in_hex)
+      ptr = ptr + 1
+	  
+	  ptr = ptr - 8
 
-			tvbr = buffer:range(ptr,1)  -- set up a range
-			byte_in_hex = tvbr:uint()  -- extract the byte
-			rawdatatree:add(pt6_data_byte_7, byte_in_hex)
-			ptr = ptr + 1
+	  subtree:add(pt6_canid, can_id)
+	  
+	  if can_id == 0x0a8 then info_text = canid_0x0a8(buffer, ptr, subtree) end
+	  if can_id == 0x0aa then info_text = canid_0x0aa(buffer, ptr, subtree) end
 
-			ptr = ptr - 8
+	  if can_id == 0x0c0 then info_text = canid_0x0c0(buffer, ptr, subtree) end
+	  if can_id == 0x0c4 then info_text = canid_0x0c4(buffer, ptr, subtree) end
+	  if can_id == 0x0c8 then info_text = canid_0x0c8(buffer, ptr, subtree) end
+	  if can_id == 0x0ce then info_text = canid_0x0ce(buffer, ptr, subtree) end
 
-			subtree:add(pt6_canid, can_id)
+	  if can_id == 0x0d7 then info_text = canid_0x0d7(buffer, ptr, subtree) end
 
-			if can_id == 0x0a8 then info_text = canid_0x0a8(buffer, ptr, subtree) end
-			if can_id == 0x0aa then info_text = canid_0x0aa(buffer, ptr, subtree) end
+	  if can_id == 0x0e2 then info_text = canid_0x0e2(buffer, ptr, subtree) end
+	  if can_id == 0x0e6 then info_text = canid_0x0e6(buffer, ptr, subtree) end
+	  if can_id == 0x0ea then info_text = canid_0x0ea(buffer, ptr, subtree) end
+	  if can_id == 0x0ee then info_text = canid_0x0ee(buffer, ptr, subtree) end
 
-			if can_id == 0x0c0 then info_text = canid_0x0c0(buffer, ptr, subtree) end
-			if can_id == 0x0c4 then info_text = canid_0x0c4(buffer, ptr, subtree) end
-			if can_id == 0x0c8 then info_text = canid_0x0c8(buffer, ptr, subtree) end
-			if can_id == 0x0ce then info_text = canid_0x0ce(buffer, ptr, subtree) end
+	  if can_id == 0x0f2 then info_text = canid_0x0f2(buffer, ptr, subtree) end
+	  if can_id == 0x0fa then info_text = canid_0x0fa(buffer, ptr, subtree) end
+	  if can_id == 0x0fb then info_text = canid_0x0fb(buffer, ptr, subtree) end
 
-			if can_id == 0x0d7 then info_text = canid_0x0d7(buffer, ptr, subtree) end
+	  if can_id == 0x130 then info_text = canid_0x130(buffer, ptr, subtree) end
+	  if can_id == 0x19e then info_text = canid_0x19e(buffer, ptr, subtree) end
+	  
+	  if can_id == 0x1a0 then info_text = canid_0x1a0(buffer, ptr, subtree) end
+	  if can_id == 0x1a6 then info_text = canid_0x1a6(buffer, ptr, subtree) end
+	  
+	  if can_id == 0x1b4 then info_text = canid_0x1b4(buffer, ptr, subtree) end
+	  if can_id == 0x1b5 then info_text = canid_0x1b5(buffer, ptr, subtree) end
+	  if can_id == 0x1b6 then info_text = canid_0x1b6(buffer, ptr, subtree) end
+	  
+	  if can_id == 0x1d0 then info_text = canid_0x1d0(buffer, ptr, subtree) end
+	  if can_id == 0x1d6 then info_text = canid_0x1d6(buffer, ptr, subtree) end
+	  
+	  if can_id == 0x1ee then info_text = canid_0x1ee(buffer, ptr, subtree) end
 
-			if can_id == 0x0e2 then info_text = canid_0x0e2(buffer, ptr, subtree) end
-			if can_id == 0x0e6 then info_text = canid_0x0e6(buffer, ptr, subtree) end
-			if can_id == 0x0ea then info_text = canid_0x0ea(buffer, ptr, subtree) end
-			if can_id == 0x0ee then info_text = canid_0x0ee(buffer, ptr, subtree) end
+	  if can_id == 0x200 then info_text = canid_0x200(buffer, ptr, subtree) end
+	  if can_id == 0x202 then info_text = canid_0x202(buffer, ptr, subtree) end
+	  if can_id == 0x21a then info_text = canid_0x21a(buffer, ptr, subtree) end
+	  if can_id == 0x23a then info_text = canid_0x23a(buffer, ptr, subtree) end
+	  if can_id == 0x242 then info_text = canid_0x242(buffer, ptr, subtree) end
+	  if can_id == 0x246 then info_text = canid_0x246(buffer, ptr, subtree) end
+	  if can_id == 0x24b then info_text = canid_0x24b(buffer, ptr, subtree) end
+	  if can_id == 0x26e then info_text = canid_0x26e(buffer, ptr, subtree) end
 
-			if can_id == 0x0f2 then info_text = canid_0x0f2(buffer, ptr, subtree) end
-			if can_id == 0x0fa then info_text = canid_0x0fa(buffer, ptr, subtree) end
-			if can_id == 0x0fb then info_text = canid_0x0fb(buffer, ptr, subtree) end
+	  if can_id == 0x2a0 then info_text = canid_0x2a0(buffer, ptr, subtree) end
+	  if can_id == 0x2a6 then info_text = canid_0x2a0(buffer, ptr, subtree) end
 
-			if can_id == 0x130 then info_text = canid_0x130(buffer, ptr, subtree) end
-			if can_id == 0x19e then info_text = canid_0x19e(buffer, ptr, subtree) end
+	  if can_id == 0x2ba then info_text = canid_0x2ba(buffer, ptr, subtree) end
 
-			if can_id == 0x1a0 then info_text = canid_0x1a0(buffer, ptr, subtree) end
-			if can_id == 0x1a6 then info_text = canid_0x1a6(buffer, ptr, subtree) end
+	  if can_id == 0x2c0 then info_text = canid_0x2c0(buffer, ptr, subtree) end
+	  if can_id == 0x2ca then info_text = canid_0x2ca(buffer, ptr, subtree) end
+	  if can_id == 0x2cf then info_text = canid_0x2cf(buffer, ptr, subtree) end
+	  
+	  if can_id == 0x2d0 then info_text = canid_0x2d0(buffer, ptr, subtree) end
+	  if can_id == 0x2d2 then info_text = canid_0x2d2(buffer, ptr, subtree) end
+	  if can_id == 0x2d5 then info_text = canid_0x2d5(buffer, ptr, subtree) end
 
-			if can_id == 0x1b4 then info_text = canid_0x1b4(buffer, ptr, subtree) end
-			if can_id == 0x1b5 then info_text = canid_0x1b5(buffer, ptr, subtree) end
-			if can_id == 0x1b6 then info_text = canid_0x1b6(buffer, ptr, subtree) end
+	  if can_id == 0x2e6 then info_text = canid_0x2e6(buffer, ptr, subtree) end
+	  if can_id == 0x2ea then info_text = canid_0x2ea(buffer, ptr, subtree) end
 
-			if can_id == 0x1d0 then info_text = canid_0x1d0(buffer, ptr, subtree) end
-			if can_id == 0x1d6 then info_text = canid_0x1d6(buffer, ptr, subtree) end
+	  if can_id == 0x2f0 then info_text = canid_0x2f0(buffer, ptr, subtree) end
+	  if can_id == 0x2f4 then info_text = canid_0x2f4(buffer, ptr, subtree) end
+	  if can_id == 0x2f6 then info_text = canid_0x2f6(buffer, ptr, subtree) end
+	  if can_id == 0x2f8 then info_text = canid_0x2f8(buffer, ptr, subtree) end
+	  if can_id == 0x2fa then info_text = canid_0x2fa(buffer, ptr, subtree) end
+	  if can_id == 0x2fc then info_text = canid_0x2fc(buffer, ptr, subtree) end
+	  
+	  if can_id == 0x31d then info_text = canid_0x31d(buffer, ptr, subtree) end
+	  if can_id == 0x328 then info_text = canid_0x328(buffer, ptr, subtree) end
+	  if can_id == 0x32e then info_text = canid_0x32e(buffer, ptr, subtree) end
+	  if can_id == 0x330 then info_text = canid_0x330(buffer, ptr, subtree) end
+	  if can_id == 0x332 then info_text = canid_0x332(buffer, ptr, subtree) end
+	  
+	  if can_id == 0x349 then info_text = canid_0x349(buffer, ptr, subtree) end
+	  if can_id == 0x34f then info_text = canid_0x34f(buffer, ptr, subtree) end
+	  
+	  if can_id == 0x35c then info_text = canid_0x35c(buffer, ptr, subtree) end
+	  if can_id == 0x35e then info_text = canid_0x35e(buffer, ptr, subtree) end
+	  
+	  if can_id == 0x360 then info_text = canid_0x360(buffer, ptr, subtree) end
+	  if can_id == 0x362 then info_text = canid_0x362(buffer, ptr, subtree) end
+	  if can_id == 0x364 then info_text = canid_0x364(buffer, ptr, subtree) end
+	  if can_id == 0x366 then info_text = canid_0x366(buffer, ptr, subtree) end
+	  if can_id == 0x367 then info_text = canid_0x367(buffer, ptr, subtree) end
+	  
+	  if can_id == 0x380 then info_text = canid_0x380(buffer, ptr, subtree) end
+	  if can_id == 0x381 then info_text = canid_0x381(buffer, ptr, subtree) end
+	  if can_id == 0x395 then info_text = canid_0x395(buffer, ptr, subtree) end
 
-			if can_id == 0x1ee then info_text = canid_0x1ee(buffer, ptr, subtree) end
+	  if can_id == 0x3b0 then info_text = canid_0x3b0(buffer, ptr, subtree) end
+	  if can_id == 0x3b3 then info_text = canid_0x3b3(buffer, ptr, subtree) end
+	  if can_id == 0x3b4 then info_text = canid_0x3b4(buffer, ptr, subtree) end
+	  if can_id == 0x3bd then info_text = canid_0x3bd(buffer, ptr, subtree) end
+	  if can_id == 0x3be then info_text = canid_0x3be(buffer, ptr, subtree) end
+	  
+	  if can_id == 0x480 then info_text = canid_0x480(buffer, ptr, subtree) end
+	  if can_id == 0x481 then info_text = canid_0x481(buffer, ptr, subtree) end
+	  if can_id == 0x4c0 then info_text = canid_0x4c0(buffer, ptr, subtree) end
+	  if can_id == 0x4e0 then info_text = canid_0x4e0(buffer, ptr, subtree) end
+	  if can_id == 0x4f2 then info_text = canid_0x4f2(buffer, ptr, subtree) end
+	  if can_id == 0x4f8 then info_text = canid_0x4f8(buffer, ptr, subtree) end
+	  
+	  if can_id == 0x581 then info_text = canid_0x581(buffer, ptr, subtree) end
+	  if can_id == 0x592 then info_text = canid_0x581(buffer, ptr, subtree) end
+	  if can_id == 0x5a9 then info_text = canid_0x5a9(buffer, ptr, subtree) end
+	  if can_id == 0x5c0 then info_text = canid_0x5c0(buffer, ptr, subtree) end
+	  if can_id == 0x5e0 then info_text = canid_0x5e0(buffer, ptr, subtree) end
+	  if can_id == 0x5f8 then info_text = canid_0x5f8(buffer, ptr, subtree) end
 
-			if can_id == 0x200 then info_text = canid_0x200(buffer, ptr, subtree) end
-			if can_id == 0x202 then info_text = canid_0x202(buffer, ptr, subtree) end
-			if can_id == 0x21a then info_text = canid_0x21a(buffer, ptr, subtree) end
-			if can_id == 0x23a then info_text = canid_0x23a(buffer, ptr, subtree) end
-			if can_id == 0x242 then info_text = canid_0x242(buffer, ptr, subtree) end
-			if can_id == 0x246 then info_text = canid_0x246(buffer, ptr, subtree) end
-			if can_id == 0x24b then info_text = canid_0x24b(buffer, ptr, subtree) end
-			if can_id == 0x26e then info_text = canid_0x26e(buffer, ptr, subtree) end
+	  if can_id == 0x7c3 then info_text = canid_0x7c3(buffer, ptr, subtree) end
 
-			if can_id == 0x2a0 then info_text = canid_0x2a0(buffer, ptr, subtree) end
-			if can_id == 0x2a6 then info_text = canid_0x2a0(buffer, ptr, subtree) end
+	  pinfo.cols.info:set(info_text) 
+      pinfo.cols.info:fence() 
 
-			if can_id == 0x2ba then info_text = canid_0x2ba(buffer, ptr, subtree) end
-
-			if can_id == 0x2c0 then info_text = canid_0x2c0(buffer, ptr, subtree) end
-			if can_id == 0x2ca then info_text = canid_0x2ca(buffer, ptr, subtree) end
-			if can_id == 0x2cf then info_text = canid_0x2cf(buffer, ptr, subtree) end
-
-			if can_id == 0x2d0 then info_text = canid_0x2d0(buffer, ptr, subtree) end
-			if can_id == 0x2d2 then info_text = canid_0x2d2(buffer, ptr, subtree) end
-			if can_id == 0x2d5 then info_text = canid_0x2d5(buffer, ptr, subtree) end
-
-			if can_id == 0x2e6 then info_text = canid_0x2e6(buffer, ptr, subtree) end
-			if can_id == 0x2ea then info_text = canid_0x2ea(buffer, ptr, subtree) end
-
-			if can_id == 0x2f0 then info_text = canid_0x2f0(buffer, ptr, subtree) end
-			if can_id == 0x2f4 then info_text = canid_0x2f4(buffer, ptr, subtree) end
-			if can_id == 0x2f6 then info_text = canid_0x2f6(buffer, ptr, subtree) end
-			if can_id == 0x2f8 then info_text = canid_0x2f8(buffer, ptr, subtree) end
-			if can_id == 0x2fa then info_text = canid_0x2fa(buffer, ptr, subtree) end
-			if can_id == 0x2fc then info_text = canid_0x2fc(buffer, ptr, subtree) end
-
-			if can_id == 0x31d then info_text = canid_0x31d(buffer, ptr, subtree) end
-			if can_id == 0x328 then info_text = canid_0x328(buffer, ptr, subtree) end
-			if can_id == 0x32e then info_text = canid_0x32e(buffer, ptr, subtree) end
-			if can_id == 0x330 then info_text = canid_0x330(buffer, ptr, subtree) end
-			if can_id == 0x332 then info_text = canid_0x332(buffer, ptr, subtree) end
-
-			if can_id == 0x349 then info_text = canid_0x349(buffer, ptr, subtree) end
-			if can_id == 0x34f then info_text = canid_0x34f(buffer, ptr, subtree) end
-
-			if can_id == 0x35c then info_text = canid_0x35c(buffer, ptr, subtree) end
-			if can_id == 0x35e then info_text = canid_0x35e(buffer, ptr, subtree) end
-
-			if can_id == 0x360 then info_text = canid_0x360(buffer, ptr, subtree) end
-			if can_id == 0x362 then info_text = canid_0x362(buffer, ptr, subtree) end
-			if can_id == 0x364 then info_text = canid_0x364(buffer, ptr, subtree) end
-			if can_id == 0x366 then info_text = canid_0x366(buffer, ptr, subtree) end
-			if can_id == 0x367 then info_text = canid_0x367(buffer, ptr, subtree) end
-
-			if can_id == 0x380 then info_text = canid_0x380(buffer, ptr, subtree) end
-			if can_id == 0x381 then info_text = canid_0x381(buffer, ptr, subtree) end
-			if can_id == 0x395 then info_text = canid_0x395(buffer, ptr, subtree) end
-
-			if can_id == 0x3b0 then info_text = canid_0x3b0(buffer, ptr, subtree) end
-			if can_id == 0x3b3 then info_text = canid_0x3b3(buffer, ptr, subtree) end
-			if can_id == 0x3b4 then info_text = canid_0x3b4(buffer, ptr, subtree) end
-			if can_id == 0x3bd then info_text = canid_0x3bd(buffer, ptr, subtree) end
-			if can_id == 0x3be then info_text = canid_0x3be(buffer, ptr, subtree) end
-
-			if can_id == 0x480 then info_text = canid_0x480(buffer, ptr, subtree) end
-			if can_id == 0x481 then info_text = canid_0x481(buffer, ptr, subtree) end
-			if can_id == 0x4c0 then info_text = canid_0x4c0(buffer, ptr, subtree) end
-			if can_id == 0x4e0 then info_text = canid_0x4e0(buffer, ptr, subtree) end
-			if can_id == 0x4f2 then info_text = canid_0x4f2(buffer, ptr, subtree) end
-			if can_id == 0x4f8 then info_text = canid_0x4f8(buffer, ptr, subtree) end
-
-			if can_id == 0x581 then info_text = canid_0x581(buffer, ptr, subtree) end
-			if can_id == 0x592 then info_text = canid_0x581(buffer, ptr, subtree) end
-			if can_id == 0x5a9 then info_text = canid_0x5a9(buffer, ptr, subtree) end
-			if can_id == 0x5c0 then info_text = canid_0x5c0(buffer, ptr, subtree) end
-			if can_id == 0x5e0 then info_text = canid_0x5e0(buffer, ptr, subtree) end
-			if can_id == 0x5f8 then info_text = canid_0x5f8(buffer, ptr, subtree) end
-
-			if can_id == 0x7c3 then info_text = canid_0x7c3(buffer, ptr, subtree) end
-
-			pinfo.cols.info:set(info_text) 
-			pinfo.cols.info:fence() 
-		end
     end 
 
     if debug_set then print("SNAP03") end 
