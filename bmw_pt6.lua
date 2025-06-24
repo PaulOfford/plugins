@@ -199,8 +199,8 @@ function canid_0x0a8(buffer, ptr, tree)
   ptr = ptr + 2
 
   tvbr = buffer:range(ptr,2)  -- set up a range
-  local torque_int = (tvbr:le_uint() + 0) / 32  -- extract value
---  tree:add(pt6_0x0a8_torque_int, torque_int)
+  local torque_int = (tvbr:le_uint() + .0) / 32  -- extract value
+  tree:add(pt6_0x0a8_torque_int, torque_int)
   tree:add(pt6_0x0a8_torque_int, 0)
   ptr = ptr + 2
 
