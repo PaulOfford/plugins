@@ -155,6 +155,11 @@ pt6_0x0aa_rpm = ProtoField.int16("bmw_pt6.0x0aa.rpm", "Engine RPM", base.DEC)
 pt6_0x130_byte_0 = ProtoField.uint8("bmw_pt6.0x130.byte_0", "Byte 0", base.HEX, VALS_0X130_BYTE_0)
 pt6_0x130_byte_1 = ProtoField.uint8("bmw_pt6.0x130.byte_1", "Byte 1", base.HEX)
 
+pt6_0x19e_brake_pressure = ProtoField.uint16("pt6.0x19e.brake_pressure", "Brake pressure (bar)", base.dec)
+
+pt6_0x349_fuel_left = ProtoField.uint16("bmw_pt6.0x349.fuel_left", "Fuel left (ticks)", base.DEC)
+pt6_0x349_fuel_right = ProtoField.uint16("bmw_pt6.0x349.fuel_right", "Fuel right (ticks)", base.DEC)
+
 -- create myproto protocol and its fields
 -- local f_bitfield = ProtoField.uint8("myproto.bitfield", "Command", base.HEX, {[0]="Normal Packet", [1]="Last Packet"}, 0x40)
 
@@ -164,7 +169,10 @@ bmw_pt6.fields = {
   pt6_data_byte_4, pt6_data_byte_5, pt6_data_byte_6, pt6_data_byte_7,
   pt6_0x0a8_torque, pt6_0x0a8_torque_int, pt6_0x0a8_clutch, pt6_0x0a8_brake,
   pt6_0x0aa_throttle_position, pt6_0x0aa_rpm,
-  pt6_0x130_byte_0, pt6_0x130_byte_1, pt6_0x0c8_sw_angle
+  pt6_0x0c8_sw_angle,
+  pt6_0x130_byte_0, pt6_0x130_byte_1,
+  pt6_0x19e_brake_pressure,
+  pt6_0x349_fuel_left, pt6_0x349_fuel_right
 } 
 
 
@@ -174,13 +182,6 @@ bmw_pt6.experts = {bmw_pt6_invalid}
 -- register our postdissector
 register_postdissector(bmw_pt6)
 
--- format of entry: can_id, has_decode, decode_table, description, protofield_definition
-canid_table = {
-	{ 0x02fa, 0, 0, "Send frequency data", 0 },
-	{ 0x0481, 1, subcmd_opmode_table, "Select transceive mode", civ_subcmd01 },
-	{ 0x0581, 1, subcmd_opmode_table, "Seatbelt status", 0 },
-	{ 0xff, 0, 0, "end of table", 0 }
-}
 
 -- This function gets called when a new trace file is loaded 
 function bmw_pt6.init() 
@@ -192,7 +193,7 @@ function canid_0x0a8(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  ptr = ptr + 1  -- skip the first byte
+  ptr = ptr + 1  -- skip first byte
 
   tvbr = buffer:range(ptr,2)  -- set up a range
   local torque = (tvbr:le_uint() + .0) / 32  -- extract value
@@ -200,9 +201,9 @@ function canid_0x0a8(buffer, ptr, tree)
   ptr = ptr + 2
 
   tvbr = buffer:range(ptr,2)  -- set up a range
-  local torque_int = (tvbr:le_uint() + .0) / 32  -- extract value
+  local torque_int = math.floor(tvbr:le_uint() / 32)  -- extract value
   tree:add(pt6_0x0a8_torque_int, torque_int)
-  info_text = "Torque: " .. torque_int .. " Nm"
+  info_text = "Torque (Nm): " .. torque_int
   ptr = ptr + 2
 
   -- byte 5 - Clutch pedal status
@@ -210,7 +211,7 @@ function canid_0x0a8(buffer, ptr, tree)
   byte_in_hex = tvbr:uint()  -- extract the byte
   tree:add(pt6_0x0a8_clutch, bit.band(byte_in_hex, 0x01))
   info_text = info_text .. ", Clutch: " .. bit.band(byte_in_hex, 0x01)
-  ptr = ptr + 2
+  ptr = ptr + 1
 
   -- byte 7 - Brake pedal status
   tvbr = buffer:range(ptr,1)  -- set up a range
@@ -226,19 +227,19 @@ function canid_0x0aa(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  ptr = ptr + 2
+  ptr = ptr + 3
 
-  tvbr = buffer:range(ptr,2)  -- set up a range
-  local throttle_position = tvbr:le_uint()  -- extract value
+  tvbr = buffer:range(ptr,1)  -- set up a range
+  local throttle_position = math.floor(tvbr:le_uint() * 0.3937)  -- extract value
   tree:add(pt6_0x0aa_throttle_position, throttle_position)
-  ptr = ptr + 2
+  ptr = ptr + 1
 
   tvbr = buffer:range(ptr,2)  -- set up a range
-  local rpm = tvbr:le_int() / 4  -- extract value
+  local rpm = math.floor(tvbr:le_int() / 4)  -- extract value
   tree:add(pt6_0x0aa_rpm, rpm)
   ptr = ptr + 2
 
-  info_text = "Throttle: " .. throttle_position .. ", RPM:" .. rpm
+  info_text = "Throttle (%): " .. throttle_position .. ", RPM: " .. rpm
 
   return info_text
 end
@@ -248,7 +249,7 @@ function canid_0x0c0(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "ABS / Brake counter"
+  info_text = "DSC: Counter"
 
   return info_text
 end
@@ -258,7 +259,6 @@ function canid_0x0c4(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  ptr = 0
   tvbr = buffer:range(ptr,2)  -- set up a range
   local sw_position = tvbr:le_int()  -- extract value
 
@@ -270,7 +270,7 @@ function canid_0x0c4(buffer, ptr, tree)
   
   tree:add(pt6_0x0c8_sw_angle, steering_wheel_degrees)
 
-  info_text = "Steering wheel angle: " .. steering_wheel_degrees .. " degrees"
+  info_text = "Steering wheel angle (deg): " .. steering_wheel_degrees
 
   return info_text
 end
@@ -280,7 +280,6 @@ function canid_0x0c8(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  ptr = 0
   tvbr = buffer:range(ptr,2)  -- set up a range
   local sw_position = tvbr:le_int()  -- extract value
 
@@ -292,7 +291,7 @@ function canid_0x0c8(buffer, ptr, tree)
   
   tree:add(pt6_0x0c8_sw_angle, steering_wheel_degrees)
 
-  info_text = "Steering wheel angle: " .. steering_wheel_degrees .. " degrees"
+  info_text = "Steering wheel angle (deg): " .. steering_wheel_degrees
 
   return info_text
 end
@@ -302,7 +301,7 @@ function canid_0x0ce(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "Individual wheel Speeds"
+  info_text = "WLSPD (DSC): Wheel Speeds (km/h)"
 
   return info_text
 end
@@ -322,7 +321,7 @@ function canid_0x0e2(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "Passenger door status"
+  info_text = "DOOR_FL (CAS): Front Door (Front Left)"
 
   return info_text
 end
@@ -332,7 +331,7 @@ function canid_0x0e6(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "Rear passenger door status"
+  info_text = "DOOR_RL (CAS): Rear Door (Rear Left)"
 
   return info_text
 end
@@ -342,7 +341,7 @@ function canid_0x0ea(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "Driver door status"
+  info_text = "DOOR_FR (CAS): Front Door (Front Right)"
 
   return info_text
 end
@@ -352,7 +351,7 @@ function canid_0x0ee(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "Rear driver door status"
+  info_text = "DOOR_RR (CAS): Rear Door (Rear Right)"
 
   return info_text
 end
@@ -362,7 +361,7 @@ function canid_0x0f2(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "Boot (trunk) status"
+  info_text = "BOOT (CAS): Trunk Status (Boot)"
 
   return info_text
 end
@@ -372,7 +371,7 @@ function canid_0x0fa(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "Electric window controls - driver"
+  info_text = "WIND_FL (JBBF): Window Controls (Front Left)"
 
   return info_text
 end
@@ -382,7 +381,7 @@ function canid_0x0fb(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "Electric window controls - passenger"
+  info_text = "WIND_FR (JBBF): Window Controls (Front Right)"
 
   return info_text
 end
@@ -404,7 +403,7 @@ function canid_0x130(buffer, ptr, tree)
   tree:add(pt6_0x130_byte_0, byte_in_hex)
   ptr = ptr + 1
 
-  info_text = VALS_0X130_BYTE_0[byte_in_hex]
+  info_text = "POWER (JBBF): Terminal 15 (KL15)"
 
   return info_text
 end
@@ -414,7 +413,12 @@ function canid_0x19e(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "ABS / braking force"
+  ptr = ptr + 6
+  -- byte 6 - Brake pressure
+  tvbr = buffer:range(ptr,1)  -- set up a range
+  brake_pressure = tvbr:uint()  -- extract the byte
+  tree:add(pt6_0x19e_brake_pressure, brake_pressure)
+  info_text = "Brake pressure (bar): " .. brake_pressure
 
   return info_text
 end
@@ -434,7 +438,7 @@ function canid_0x1a6(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "Speed, as used by the instrument cluster"
+  info_text = "ACCEL (KOMBI): Acceleration and Speed Data"
 
   return info_text
 end
@@ -444,7 +448,7 @@ function canid_0x1b4(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "Speed [mph] and handbrake status"
+  info_text = "BRAKE (KOMBI): Speed and Handbrake Status"
 
   return info_text
 end
@@ -454,7 +458,7 @@ function canid_0x1b5(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "??"
+  info_text = "IHKA: Heat Flow Climate"
 
   return info_text
 end
@@ -464,7 +468,7 @@ function canid_0x1b6(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "??"
+  info_text = "DME: Heat Flow Engine"
 
   return info_text
 end
@@ -474,7 +478,7 @@ function canid_0x1d0(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "Engine temp, pressure sensor & handbrake"
+  info_text = "MOTOR (DME): Engine Coolant Temperature"
 
   return info_text
 end
@@ -484,7 +488,7 @@ function canid_0x1d6(buffer, ptr, tree)
   local tvbr
   local byte_in_hex
 
-  info_text = "MFL (Steering Wheel) Buttons"
+  info_text = "MFL (SZL): Steering Wheel Controls"
 
   return info_text
 end
@@ -508,14 +512,14 @@ end
 
 function canid_0x202(buffer, ptr, tree)
   local info_text = ""
-  info_text = "Lights (dimmer status)"
+  info_text = "LIGHT (FRM): Dimmer Status"
 
   return info_text
 end
 
 function canid_0x21a(buffer, ptr, tree)
   local info_text = ""
-  info_text = "Lighting status"
+  info_text = "LIGHT (FRM): Lighting Status"
 
   return info_text
 end
@@ -529,7 +533,7 @@ end
 
 function canid_0x242(buffer, ptr, tree)
   local info_text = ""
-  info_text = "??"
+  info_text = "IHKA: Climate Front Status"
 
   return info_text
 end
@@ -564,7 +568,7 @@ end
 
 function canid_0x2a6(buffer, ptr, tree)
   local info_text = ""
-  info_text = "Windscreen wiper controls"
+  info_text = "RLS (SZL): Wiper Switch Status"
 
   return info_text
 end
@@ -578,7 +582,7 @@ end
 
 function canid_0x2c0(buffer, ptr, tree)
   local info_text = ""
-  info_text = "??"
+  info_text = "LIGHT (FRM): LCD Lighting"
 
   return info_text
 end
@@ -648,21 +652,21 @@ end
 
 function canid_0x2f6(buffer, ptr, tree)
   local info_text = ""
-  info_text = "??"
+  info_text = "LIGHT (FRM): Light Control"
 
   return info_text
 end
 
 function canid_0x2f8(buffer, ptr, tree)
   local info_text = ""
-  info_text = "Report time and date"
+  info_text = "DATE (KOMBI): System Date and Time"
 
   return info_text
 end
 
 function canid_0x2fa(buffer, ptr, tree)
   local info_text = ""
-  info_text = "Seat occupancy seat belt contacts"
+  info_text = "ACSM: Seat Belt Contact"
 
   return info_text
 end
@@ -711,8 +715,21 @@ end
 
 function canid_0x349(buffer, ptr, tree)
   local info_text = ""
-  info_text = "Fuel level sensor"
+  local tvbr
+  local fuel
 
+  tvbr = buffer:range(ptr,2)  -- set up a range
+  fuel = tvbr:le_uint()  -- extract value
+  
+  tree:add(pt6_0x349_fuel_left, fuel)
+  info_text = "Fuel left (ticks): " .. fuel
+  
+  ptr = ptr + 2
+  tvbr = buffer:range(ptr,2)  -- set up a range
+  fuel = tvbr:le_uint()  -- extract value
+  tree:add(pt6_0x349_fuel_right, fuel)
+  info_text = info_text .. " , Fuel right (ticks): " .. fuel
+  
   return info_text
 end
 
@@ -1027,8 +1044,8 @@ function bmw_pt6.dissector(buffer,pinfo,tree)
 	  if can_id == 0x0f2 then info_text = canid_0x0f2(buffer, ptr, subtree) end
 	  if can_id == 0x0fa then info_text = canid_0x0fa(buffer, ptr, subtree) end
 	  if can_id == 0x0fb then info_text = canid_0x0fb(buffer, ptr, subtree) end
-
 	  if can_id == 0x130 then info_text = canid_0x130(buffer, ptr, subtree) end
+
 	  if can_id == 0x19e then info_text = canid_0x19e(buffer, ptr, subtree) end
 	  
 	  if can_id == 0x1a0 then info_text = canid_0x1a0(buffer, ptr, subtree) end
